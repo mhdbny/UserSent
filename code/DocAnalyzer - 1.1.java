@@ -1,3 +1,4 @@
+// Keira add this line for testing collaboration
 /**
  * 
  */
@@ -40,7 +41,13 @@ public class DocAnalyzer   {
 	ArrayList<Tokenizer> tokenizer; // need many because of the threading
 	//a list of stopwords
 	HashSet<String> m_stopwords;
+	
+	// And these lines for no purpose...
+	int testing = 0;
+	int for = 0;
+	int fun = 0;
 
+	
 	//you can store the loaded reviews in this arraylist for further processing
 	ArrayList<Post> m_reviews;
 
