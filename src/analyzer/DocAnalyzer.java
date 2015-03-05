@@ -21,9 +21,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 
-import json.JSONArray;
-import json.JSONException;
-import json.JSONObject;
+
 import opennlp.tools.tokenize.Tokenizer;
 import opennlp.tools.tokenize.TokenizerME;
 import opennlp.tools.tokenize.TokenizerModel;
@@ -36,8 +34,9 @@ import org.tartarus.snowball.ext.englishStemmer;
 
 
 
-import structures.Post;
+import structures.Review;
 import structures.Token;
+import structures.User;
 /**
  * @author hongning
  * Sample codes for demonstrating OpenNLP package usage 
@@ -45,6 +44,7 @@ import structures.Token;
  * please revise it accordingly to maximize your implementation's efficiency!
  */
 public class DocAnalyzer   {
+	ArrayList<User> Users;
 	ArrayList<Tokenizer> tokenizer; // need many because of the threading
 	//a list of stopwords
 	HashSet<String> m_stopwords;
@@ -62,7 +62,7 @@ public class DocAnalyzer   {
 	private int NumberOfProcessors;
 	public DocAnalyzer(int NumberOfProcessors) {
 		this.NumberOfProcessors=NumberOfProcessors;
-		//	m_reviews = new ArrayList<Post>();
+		Users=new ArrayList<User>();
 		m_stopwords= new HashSet<String>();
 		m_initialVocabs=new HashMap<String, Token>();
 		MaxTokenID=0;
@@ -109,19 +109,29 @@ public class DocAnalyzer   {
 		else
 			return token;
 	}
-	public void analyzeDocumentDemo(JSONObject json,int core) {		
+	public void analyzeDocumentDemo(String filename,int core) {		
 		try {
-			JSONArray jarray = json.getJSONArray("Reviews");
-			for(int i=0; i<jarray.length(); i++) {
-				Post review = new Post(jarray.getJSONObject(i));
+			User user=new User();
+			BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(filename), "UTF-8"));
+			String line;
+			user.setID(filename.substring(filename.lastIndexOf("\\")+1, filename.length()-4));
+			user.setName(reader.readLine());
+			while ((line = reader.readLine()) != null&&!line.isEmpty()) {
+				Review r=new Review();
+				r.setProduct_ID(line);
+				r.setContent(reader.readLine());
+				r.setUsefulness(reader.readLine());
+				r.setScore(Double.parseDouble(reader.readLine()));
+				r.setTime( Long.parseLong(reader.readLine()));
+				user.Reviews.add(r);
+				// process Content
 				ArrayList<String> AddedTokens=new ArrayList<String>();
-				// preprocess each token
 				String previousToken="";
-				for(String token:tokenizer.get(core).tokenize(review.getContent())){
+				for(String token:tokenizer.get(core).tokenize(r.getContent())){
 					String finalToken=SnowballStemmingDemo(NormalizationDemo(token));
 					if(!finalToken.isEmpty()) // if the token is empty, then try next token
 					{ 
-						//if(AddedTokens.contains(finalToken))continue;
+						 
 						// add uni-grams and bigrams to the hashmap.
 						synchronized(lock1) {
 							// unigram
@@ -147,94 +157,16 @@ public class DocAnalyzer   {
 					reviewsCount++;
 				}
 			}
-		} catch (JSONException e) {
-			e.printStackTrace();
-		}
-	}
-	/*public void CaculateDF()
-	{
-		int ReviewsSize=m_reviews.size();
-		HashMap<Integer,String> ProcessingStatus = new HashMap<Integer, String>(); // used for output purposes
-		for (int i = 1; i <= 10; i++)
-			ProcessingStatus.put((int)(ReviewsSize * (i / 10d)), i+"0% ("+(int)(ReviewsSize * (i / 10d))+" out of "+ReviewsSize+")." );
-
-
-		ArrayList<Thread> threads = new ArrayList<Thread>();
-		for(int i=0;i<this.NumberOfProcessors;++i){
-			threads.add(  (new Thread() {
-				int core;
-				public void run() {
-					try {
-						for (int j = 0; j + core <ReviewsSize; j +=NumberOfProcessors)
-						{
-							ArrayList<String> AddedTokens=new ArrayList<String>();
-							if (ProcessingStatus.containsKey(j + core))
-								System.out.println("Processed " +ProcessingStatus.get(j + core));
-							String previousToken="";
-							for(String token:tokenizer.get(core).tokenize(m_reviews.get(j + core).getContent())){
-								String finalToken=SnowballStemmingDemo(NormalizationDemo(token));
-								if(!finalToken.isEmpty()) // if the token is empty, then try next token
-								{ 
-									// add uni-grams and bigrams to the hashmap.
-									synchronized(lock1) {
-										// unigram
-										if(m_initialVocabs.containsKey(finalToken)	&&!AddedTokens.contains(finalToken) ){
-											m_initialVocabs.get(finalToken).setValue( m_initialVocabs.get(finalToken).getValue()+1);// increase count
-											AddedTokens.add(finalToken);}
-										// bigram
-										if(m_initialVocabs.containsKey(previousToken+"-"+finalToken)&&!AddedTokens.contains(finalToken)){
-											m_initialVocabs.get(previousToken+"-"+finalToken).setValue( m_initialVocabs.get(previousToken+"-"+finalToken).getValue()+1);// increase count
-											AddedTokens.add(previousToken+"-"+finalToken);
-										}
-									}
-								}
-								previousToken=finalToken;
-							}
-						}
-					} catch (Exception e) {
-						e.printStackTrace();
-					} 
-
-				}
-				private Thread initialize(int core) {
-					this.core = core;
-					return this;
-				}
-			}).initialize(i));
-			threads.get(i).start();
-		}
-		for(int i=0;i<NumberOfProcessors;++i){
-			try {
-				threads.get(i).join();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			} 
-		} 
-	}
-	 */
-	//sample code for loading a json file
-	public JSONObject LoadJson(String filename) {
-		try {
-			BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(filename), "UTF-8"));
-			StringBuffer buffer = new StringBuffer(1024);
-			String line;
-
-			while((line=reader.readLine())!=null) {
-				buffer.append(line);
-			}
 			reader.close();
-
-			return new JSONObject(buffer.toString());
-		} catch (IOException e) {
-			System.err.format("[Error]Failed to open file %s!", filename);
-			e.printStackTrace();
-			return null;
-		} catch (JSONException e) {
-			System.err.format("[Error]Failed to parse json file %s!", filename);
-			e.printStackTrace();
-			return null;
+			synchronized(lock1) {
+				Users.add(user);
+			}
+		} catch(IOException e){
+			System.err.format("[Error]Failed to open file %s!!", filename);
 		}
+
 	}
+ 
 
 	public ArrayList<String> GetFiles(String folder, String suffix) {
 		File dir = new File(folder);
@@ -388,39 +320,30 @@ public class DocAnalyzer   {
 
 	}
 	public static void main(String[] args) {	
-		int NumberOfProcessors=8;
-		DocAnalyzer analyzer = new DocAnalyzer(NumberOfProcessors);
+		// Load Config file
+		Config.Load();
+
+
+		DocAnalyzer analyzer = new DocAnalyzer(Config.NumberOfProcessors);
 		DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
-		ArrayList<String>Files=analyzer.GetFiles("./data/Yelp_small/train", ".json");
+		ArrayList<String>Files=analyzer.GetFiles(Config.DataDirPath, ".txt");
 		int FilesSize=Files.size();
-		System.out.println(dateFormat.format(new Date())+ " Loading documents.");
 		HashMap<Integer,String> ProcessingStatus = new HashMap<Integer, String>(); // used for output purposes
 		for (int i = 1; i <= 10; i++)
 			ProcessingStatus.put((int)(FilesSize * (i / 10d)), i+"0% ("+(int)(FilesSize * (i / 10d))+" out of "+FilesSize+")." );
-	/*	for (int j = 0; j  <FilesSize; j +=NumberOfProcessors)
-		{
-			if (ProcessingStatus.containsKey(j  ))
-			{
-				Date date = new Date();
-				System.out.println(dateFormat.format(date)+" - Loaded " +ProcessingStatus.get(j ));
-			}
-			analyzer.analyzeDocumentDemo(analyzer.LoadJson(Files.get(j)),0);
-		}*/
+
 
 		ArrayList<Thread> threads = new ArrayList<Thread>();
-		for(int i=0;i<NumberOfProcessors;++i){
+		for(int i=0;i<Config.NumberOfProcessors;++i){
 			threads.add(  (new Thread() {
 				int core;
 				public void run() {
 					try {
-						for (int j = 0; j + core <FilesSize; j +=NumberOfProcessors)
+						for (int j = 0; j + core <FilesSize; j +=Config.NumberOfProcessors)
 						{
 							if (ProcessingStatus.containsKey(j + core))
-							{
-								Date date = new Date();
-								System.out.println(dateFormat.format(date)+" - Loaded " +ProcessingStatus.get(j + core));
-							}
-							analyzer.analyzeDocumentDemo(analyzer.LoadJson(Files.get(j+core)),core);
+								System.out.println(dateFormat.format(new Date())+" - Loaded " +ProcessingStatus.get(j + core));
+							analyzer.analyzeDocumentDemo( Files.get(j+core) ,core);
 						}
 					} catch (Exception e) {
 						e.printStackTrace();
@@ -434,7 +357,7 @@ public class DocAnalyzer   {
 			}).initialize(i));
 			threads.get(i).start();
 		}
-		for(int i=0;i<NumberOfProcessors;++i){
+		for(int i=0;i<Config.NumberOfProcessors;++i){
 			try {
 				threads.get(i).join();
 			} catch (InterruptedException e) {
@@ -442,8 +365,8 @@ public class DocAnalyzer   {
 			} 
 		} 
 		System.out.println("Loaded all documents!");
-		//analyzer.CaculateDF();
-		System.out.println("Fine new stop words:");
+		// analyzer.CaculateDF();
+		 	System.out.println("Fine new stop words:");
 		analyzer.FindNewStopWords();
 		System.out.println("Remove tail:");
 		analyzer.RemoveVocabTailAndStop(); 
@@ -451,7 +374,7 @@ public class DocAnalyzer   {
 		System.out.println("# docs:"+analyzer.reviewsCount);
 		analyzer.Save(analyzer.m_initialVocabs,"init");
 		analyzer.SaveTopBottomN(50); 
-		/*
+/*
 		try {
 			BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream("./init.csv"), "UTF-8"));
 			String line;
@@ -470,7 +393,7 @@ public class DocAnalyzer   {
 		}
 		System.out.format("vocab %d  \n", analyzer.m_initialVocabs.size() );
 		analyzer.RemoveVocabTailAndStop(); 
-		analyzer.Save(analyzer.m_initialVocabs,"init2");*/
+		analyzer.Save(analyzer.m_initialVocabs,"init2"); */
 	}
 
 
