@@ -10,9 +10,7 @@ import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.Date;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
+import java.util.Date; 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -53,33 +51,61 @@ public class DocAnalyzer   {
 	//ArrayList<Post> m_reviews;
 	int reviewsCount ;
 	//you might need something like this to store the counting statistics for validating Zipf's and computing IDF
-	HashMap<String, Token> m_initialVocabs;	
+	public HashMap<String, Token> m_Vocabs;	
 
 	private Object lock1 = new Object();
 	private Object lock2 = new Object();
 	private int MaxTokenID;
 	//we have also provided sample implementation of language model in src.structures.LanguageModel
-	private int NumberOfProcessors;
-	public DocAnalyzer(int NumberOfProcessors) {
-		this.NumberOfProcessors=NumberOfProcessors;
+
+	public DocAnalyzer( ) {
+
 		Users=new ArrayList<User>();
 		m_stopwords= new HashSet<String>();
-		m_initialVocabs=new HashMap<String, Token>();
+		m_Vocabs=new HashMap<String, Token>();
 		MaxTokenID=0;
 		reviewsCount=0;
 		try {
 			//tokenizer = new TokenizerME(new TokenizerModel(new FileInputStream("/cslab/home/ma2sm/hw1/data/Model/en-token.bin")));
 			tokenizer=new ArrayList<Tokenizer>();
-			for(int i=0;i<NumberOfProcessors;++i)
+			for(int i=0;i<Config.NumberOfProcessors;++i)
 				tokenizer.add( new TokenizerME(new TokenizerModel(new FileInputStream("./data/Model/en-token.bin"))));
 			// Load Stopwards
-			LoadStopwords("./data/english.stop");
+			LoadStopwords("./data/custom.stop");
 		}
 		catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
+	public void LoadVocab(String filename)
+	{
+		try {
+			BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(filename), "UTF-8"));
+			String line;
 
+			while ((line = reader.readLine()) != null) {
+				//it is very important that you perform the same processing operation to the loaded stopwords
+				//otherwise it won't be matched in the text content
+				if (line.isEmpty())continue;
+				String[] values=line.split(",");
+				m_Vocabs.put(values[1],new Token(Integer.parseInt(values[0]),values[1],Double.parseDouble(values[2])));
+			}
+			reader.close();
+
+		} catch(IOException e){
+			System.err.format("[Error]Failed to open file !!" );
+		}
+	}
+
+	//sample code for demonstrating how to use Snowball stemmer
+	public String SnowballStemmingDemo(String token) {
+		SnowballStemmer stemmer = new englishStemmer();
+		stemmer.setCurrent(token);
+		if (stemmer.stem())
+			return stemmer.getCurrent();
+		else
+			return token;
+	}
 	//sample code for loading a list of stopwords from file
 	//you can manually modify the stopword file to include your newly selected words
 	public void LoadStopwords(String filename) {
@@ -100,16 +126,62 @@ public class DocAnalyzer   {
 			System.err.format("[Error]Failed to open file %s!!", filename);
 		}
 	}
-	//sample code for demonstrating how to use Snowball stemmer
-	public String SnowballStemmingDemo(String token) {
-		SnowballStemmer stemmer = new englishStemmer();
-		stemmer.setCurrent(token);
-		if (stemmer.stem())
-			return stemmer.getCurrent();
-		else
-			return token;
-	}
 	public void analyzeDocumentDemo(String filename,int core) {		
+		try {
+
+			BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(filename), "UTF-8"));
+			String line;
+
+			reader.readLine() ;
+			while ((line = reader.readLine()) != null&&!line.isEmpty()) {
+				String content=reader.readLine() ;
+				reader.readLine() ;
+				double score=Double.parseDouble(reader.readLine()) ;
+				reader.readLine() ;
+				if(score==3)// skip neutral reviews
+					continue;
+
+				// process Content
+				ArrayList<String> AddedTokens=new ArrayList<String>();
+				String previousToken="";
+				for(String token:tokenizer.get(core).tokenize(content)){
+					String finalToken=SnowballStemmingDemo(NormalizationDemo(token));
+					if(!finalToken.isEmpty()) // if the token is empty, then try next token
+					{ 
+
+						// add uni-grams and bigrams to the hashmap.
+						synchronized(lock1) {
+							// unigram
+							if(!m_Vocabs.containsKey(finalToken)&&!m_stopwords.contains(finalToken))
+								m_Vocabs.put(finalToken, new Token(MaxTokenID++,finalToken));
+							// bigram
+							if(!previousToken.isEmpty()&&!m_Vocabs.containsKey(previousToken+"-"+finalToken)&&!(m_stopwords.contains(previousToken)&&m_stopwords.contains(finalToken)))
+								m_Vocabs.put(previousToken+"-"+finalToken, new Token(MaxTokenID++,previousToken+"-"+finalToken));
+
+							if(m_Vocabs.containsKey(finalToken)	&&!AddedTokens.contains(finalToken) ){
+								m_Vocabs.get(finalToken).setValue( m_Vocabs.get(finalToken).getValue()+1);// increase count
+								AddedTokens.add(finalToken);}
+							// bigram
+							if(m_Vocabs.containsKey(previousToken+"-"+finalToken)&&!AddedTokens.contains(finalToken+"-"+finalToken)){
+								m_Vocabs.get(previousToken+"-"+finalToken).setValue( m_Vocabs.get(previousToken+"-"+finalToken).getValue()+1);// increase count
+								AddedTokens.add(previousToken+"-"+finalToken);
+							}
+						}
+					}
+					previousToken=finalToken;
+				}
+				synchronized(lock2) {
+					reviewsCount++;
+				}
+			}
+			reader.close();
+		} catch(IOException e){
+			System.err.format("[Error]Failed to open file %s!!", filename);
+		}
+
+	}
+	public User LoadUser(String filename)
+	{
 		try {
 			User user=new User();
 			BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(filename), "UTF-8"));
@@ -123,36 +195,112 @@ public class DocAnalyzer   {
 				r.setUsefulness(reader.readLine());
 				r.setScore(Double.parseDouble(reader.readLine()));
 				r.setTime( Long.parseLong(reader.readLine()));
-				user.Reviews.add(r);
+				if(r.getScore()==3)// skip neutral reviews
+					continue;
 				// process Content
-				ArrayList<String> AddedTokens=new ArrayList<String>();
+
+				String previousToken="";
+				for(String token:tokenizer.get(0).tokenize(r.getContent())){
+					String finalToken=SnowballStemmingDemo(NormalizationDemo(token));
+					if(!finalToken.isEmpty()) // if the token is empty, then try next token
+					{ 
+
+						// add uni-grams and bigrams to the hashmap.
+
+						if(m_Vocabs.containsKey(finalToken)){ 
+							String vocabID=finalToken;
+							if(!r.m_VSM.containsKey(vocabID))
+								r.m_VSM.put(vocabID, 0.0);
+							r.m_VSM.put(vocabID,r.m_VSM.get(vocabID)+1);// increase count
+						}
+						// bigram
+						if(m_Vocabs.containsKey(previousToken+"-"+finalToken)){
+							String vocabID=previousToken+"-"+finalToken;
+							if(!r.m_VSM.containsKey(vocabID))
+								r.m_VSM.put(vocabID, 0.0);
+							r.m_VSM.put(vocabID,r.m_VSM.get(vocabID)+1);// increase count
+						}
+
+					}
+					previousToken=finalToken;
+				}
+				if(r.m_VSM.size()==0)// empty vector .. do not add
+					continue;
+				// normalize TF (Sub-linear TF scaling) and them multiply by IDF to obtain TF-IDF
+				Set<String> set = r.m_VSM.keySet();
+				Iterator<String> itr = set.iterator();
+				while (itr.hasNext())
+				{
+					String key = itr.next();
+					r.m_VSM.put(key,(1+Math.log10(r.m_VSM.get(key)))*(1+Math.log10(Config.NumberOfReviewsInTraining/m_Vocabs.get(key).getValue())));
+				}
+				//r.CalculateNorm();
+				user.Reviews.add(r);
+
+			}
+			reader.close();
+			return user;
+		} catch(IOException e){
+			System.err.format("[Error]Failed to open file %s!!", filename);
+			return null;
+		}
+
+	}
+	public void analyzeVSM(String filename,int core) {		
+		try {
+			User user=new User();
+			BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(filename), "UTF-8"));
+			String line;
+			user.setID(filename.substring(filename.lastIndexOf("\\")+1, filename.length()-4));
+			user.setName(reader.readLine());
+			while ((line = reader.readLine()) != null&&!line.isEmpty()) {
+				Review r=new Review();
+				r.setProduct_ID(line);
+				r.setContent(reader.readLine());
+				r.setUsefulness(reader.readLine());
+				r.setScore(Double.parseDouble(reader.readLine()));
+				r.setTime( Long.parseLong(reader.readLine()));
+				if(r.getScore()==3)// skip neutral reviews
+					continue;
+				// process Content
+
 				String previousToken="";
 				for(String token:tokenizer.get(core).tokenize(r.getContent())){
 					String finalToken=SnowballStemmingDemo(NormalizationDemo(token));
 					if(!finalToken.isEmpty()) // if the token is empty, then try next token
 					{ 
-						 
+
 						// add uni-grams and bigrams to the hashmap.
 						synchronized(lock1) {
-							// unigram
-							if(!m_initialVocabs.containsKey(finalToken)&&!m_stopwords.contains(finalToken))
-								m_initialVocabs.put(finalToken, new Token(MaxTokenID++,finalToken));
+							if(m_Vocabs.containsKey(finalToken)){ 
+								String vocabID=finalToken;
+								if(!r.m_VSM.containsKey(vocabID))
+									r.m_VSM.put(vocabID, 0.0);
+								r.m_VSM.put(vocabID,r.m_VSM.get(vocabID)+1);// increase count
+							}
 							// bigram
-							if(!previousToken.isEmpty()&&!m_initialVocabs.containsKey(previousToken+"-"+finalToken)&&!(m_stopwords.contains(previousToken)&&m_stopwords.contains(finalToken)))
-								m_initialVocabs.put(previousToken+"-"+finalToken, new Token(MaxTokenID++,previousToken+"-"+finalToken));
-
-							if(m_initialVocabs.containsKey(finalToken)	&&!AddedTokens.contains(finalToken) ){
-								m_initialVocabs.get(finalToken).setValue( m_initialVocabs.get(finalToken).getValue()+1);// increase count
-								AddedTokens.add(finalToken);}
-							// bigram
-							if(m_initialVocabs.containsKey(previousToken+"-"+finalToken)&&!AddedTokens.contains(finalToken+"-"+finalToken)){
-								m_initialVocabs.get(previousToken+"-"+finalToken).setValue( m_initialVocabs.get(previousToken+"-"+finalToken).getValue()+1);// increase count
-								AddedTokens.add(previousToken+"-"+finalToken);
+							if(m_Vocabs.containsKey(previousToken+"-"+finalToken)){
+								String vocabID=previousToken+"-"+finalToken;
+								if(!r.m_VSM.containsKey(vocabID))
+									r.m_VSM.put(vocabID, 0.0);
+								r.m_VSM.put(vocabID,r.m_VSM.get(vocabID)+1);// increase count
 							}
 						}
 					}
 					previousToken=finalToken;
 				}
+				if(r.m_VSM.size()==0)// empty vector .. do not add
+					continue;
+				// normalize TF (Sub-linear TF scaling) and them multiply by IDF to obtain TF-IDF
+				Set<String> set = r.m_VSM.keySet();
+				Iterator<String> itr = set.iterator();
+				while (itr.hasNext())
+				{
+					String key = itr.next();
+					r.m_VSM.put(key,(1+Math.log10(r.m_VSM.get(key)))*(1+Math.log10(Config.NumberOfReviewsInTraining/m_Vocabs.get(key).getValue())));
+				}
+				//r.CalculateNorm();
+				user.Reviews.add(r);
 				synchronized(lock2) {
 					reviewsCount++;
 				}
@@ -166,8 +314,6 @@ public class DocAnalyzer   {
 		}
 
 	}
- 
-
 	public ArrayList<String> GetFiles(String folder, String suffix) {
 		File dir = new File(folder);
 		ArrayList<String> Files=new ArrayList<String>();
@@ -180,10 +326,6 @@ public class DocAnalyzer   {
 		}
 		return Files;
 	}
-
-
-
-
 	//sample code for demonstrating how to perform text normalization
 	public String NormalizationDemo(String token) {
 		// convert to lower case
@@ -204,55 +346,16 @@ public class DocAnalyzer   {
 		//tested on this string:  "This., -/ is #! an <>|~!@#$%^&*()_-+=}{[]\"':;?/>.<, $ % ^ & * example ;: {} of a = -_ string with `~)() punctuation" 
 		return token;
 	}
-	public void FindNewStopWords()
-	{
-		// Sort
-		ArrayList<Token> sortedTokens = new ArrayList<Token>(m_initialVocabs.values());
-		Collections.sort(sortedTokens, new Comparator<Token>() {
 
-			public int compare(Token T1, Token T2) {
-				return Double.compare(T2.getValue(),T1.getValue());
-			}
-		});
-		ArrayList<String> newStopWords=new ArrayList<String>();
-		//  Get first 100
-		for	(int i=0;i<100;++i)
-			if(!m_stopwords.contains(sortedTokens.get(i).getToken()))
-				newStopWords.add(sortedTokens.get(i).getToken());
-		// Save newStopWords and merge them with the initial ones
-		try {
-			FileWriter fstream = new FileWriter("./newStop.txt", false);
-			BufferedWriter out = new BufferedWriter(fstream);
-			for(String newWord:newStopWords){
-				out.write(newWord+"\n");
-				m_stopwords.add(newWord);
-			}
-			out.close();
-			System.out.println("New stop words are saved!");
-		} catch (Exception e) {
-			e.printStackTrace(); 
-		}
-	}
-	public void RemoveVocabTailAndStop()
+	public void RemoveVocabTail()
 	{
-		Set<String> set = m_initialVocabs.keySet();
+		Set<String> set = m_Vocabs.keySet();
 		Iterator<String> itr = set.iterator();
 		while (itr.hasNext())
 		{
 			String key = itr.next();
-			if (m_initialVocabs.get(key).getValue()<50)  
+			if (m_Vocabs.get(key).getValue()<50)  
 				itr.remove(); 
-			// check for new stop words
-			else if(m_stopwords.contains(key) )// unigram
-				itr.remove();
-			else if(key.contains("-")){
-				boolean foundinStop=true;
-				for(String subkey:key.split("-"))
-					if(!m_stopwords.contains(subkey))
-						foundinStop=false;
-				if(foundinStop)
-					itr.remove();
-			}
 		}
 	}
 	public void Save(HashMap<String,Token> Map,String Type)
@@ -283,49 +386,11 @@ public class DocAnalyzer   {
 
 	}
 
-	public void SaveTopBottomN(int N)
+
+
+	public static void BuildVocab(DocAnalyzer analyzer)
 	{
-		// Sort
-		ArrayList<Token> sortedTokens = new ArrayList<Token>(m_initialVocabs.values());
-		Collections.sort(sortedTokens, new Comparator<Token>() {
 
-			public int compare(Token T1, Token T2) {
-				return Double.compare(T2.getValue(),T1.getValue());
-			}
-		});
-		// Save Top N and Bottom N to csv files
-		try {
-			// Top N
-			FileWriter fstream = new FileWriter("./Top"+N+".csv", false);
-			BufferedWriter out = new BufferedWriter(fstream);
-
-			int index=1;
-			for(int i=0;i<N&&i<sortedTokens.size();++i) 
-				out.write(index+++","+sortedTokens.get(i).getToken() + ","+(1+Math.log10(reviewsCount/sortedTokens.get(i).getValue()))+"\n");
-			out.close();
-			System.out.println("Top"+N+" Saved!");
-			// Bottom N
-			fstream = new FileWriter("./Bottom"+N+".csv", false);
-			out = new BufferedWriter(fstream);
-
-			index=1;
-			for(int i=sortedTokens.size()-N;i<sortedTokens.size();++i)
-				out.write(index+++","+sortedTokens.get(i).getToken() + ","+(1+Math.log10(reviewsCount/sortedTokens.get(i).getValue()))+"\n");
-			out.close();
-			System.out.println("Bottom"+N+" Saved!");
-
-		} catch (Exception e) {
-			e.printStackTrace(); 
-		}
-
-	}
-	public static void main(String[] args) {	
-		// Load Config file
-		Config.Load();
-
-
-		DocAnalyzer analyzer = new DocAnalyzer(Config.NumberOfProcessors);
-		DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
 		ArrayList<String>Files=analyzer.GetFiles(Config.DataDirPath, ".txt");
 		int FilesSize=Files.size();
 		HashMap<Integer,String> ProcessingStatus = new HashMap<Integer, String>(); // used for output purposes
@@ -342,7 +407,7 @@ public class DocAnalyzer   {
 						for (int j = 0; j + core <FilesSize; j +=Config.NumberOfProcessors)
 						{
 							if (ProcessingStatus.containsKey(j + core))
-								System.out.println(dateFormat.format(new Date())+" - Loaded " +ProcessingStatus.get(j + core));
+								System.out.println(Config.dateFormat.format(new Date())+" - Loaded " +ProcessingStatus.get(j + core));
 							analyzer.analyzeDocumentDemo( Files.get(j+core) ,core);
 						}
 					} catch (Exception e) {
@@ -365,35 +430,143 @@ public class DocAnalyzer   {
 			} 
 		} 
 		System.out.println("Loaded all documents!");
-		// analyzer.CaculateDF();
-		 	System.out.println("Fine new stop words:");
-		analyzer.FindNewStopWords();
-		System.out.println("Remove tail:");
-		analyzer.RemoveVocabTailAndStop(); 
-		System.out.println("Vocab size:"+analyzer.m_initialVocabs.size());
+
+		analyzer.RemoveVocabTail(); 
+		System.out.println("Vocab size:"+analyzer.m_Vocabs.size());
 		System.out.println("# docs:"+analyzer.reviewsCount);
-		analyzer.Save(analyzer.m_initialVocabs,"init");
-		analyzer.SaveTopBottomN(50); 
-/*
-		try {
-			BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream("./init.csv"), "UTF-8"));
-			String line;
+		analyzer.Save(analyzer.m_Vocabs,"Vocab");
 
-			while ((line = reader.readLine()) != null) {
-				//it is very important that you perform the same processing operation to the loaded stopwords
-				//otherwise it won't be matched in the text content
-				if (line.isEmpty())continue;
-				String[] values=line.split(",");
-				analyzer.m_initialVocabs.put(values[1],new Token(Integer.parseInt(values[0]),values[1],Double.parseDouble(values[2])));
-			}
-			reader.close();
+	}
+	public static void BuildVectorSpaceModel(DocAnalyzer analyzer){
 
-		} catch(IOException e){
-			System.err.format("[Error]Failed to open file !!" );
+
+
+		ArrayList<String>Files=analyzer.GetFiles(Config.DataDirPath, ".txt");
+		int FilesSize=Files.size();
+		HashMap<Integer,String> ProcessingStatus = new HashMap<Integer, String>(); // used for output purposes
+		for (int i = 1; i <= 10; i++)
+			ProcessingStatus.put((int)(FilesSize * (i / 10d)), i+"0% ("+(int)(FilesSize * (i / 10d))+" out of "+FilesSize+")." );
+
+
+		ArrayList<Thread> threads = new ArrayList<Thread>();
+		for(int i=0;i<Config.NumberOfProcessors;++i){
+			threads.add(  (new Thread() {
+				int core;
+				public void run() {
+					try {
+						for (int j = 0; j + core <FilesSize; j +=Config.NumberOfProcessors)
+						{
+							if (ProcessingStatus.containsKey(j + core))
+								System.out.println(Config.dateFormat.format(new Date())+" - Loaded " +ProcessingStatus.get(j + core));
+							analyzer.analyzeVSM(  Files.get(j+core) ,core);
+						}
+					} catch (Exception e) {
+						e.printStackTrace();
+					} 
+
+				}
+				private Thread initialize(int core) {
+					this.core = core;
+					return this;
+				}
+			}).initialize(i));
+			threads.get(i).start();
 		}
-		System.out.format("vocab %d  \n", analyzer.m_initialVocabs.size() );
-		analyzer.RemoveVocabTailAndStop(); 
-		analyzer.Save(analyzer.m_initialVocabs,"init2"); */
+		for(int i=0;i<Config.NumberOfProcessors;++i){
+			try {
+				threads.get(i).join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			} 
+		} 
+		System.out.println("Loaded all documents!");
+	}
+	public static void BuildTestAndSaveGlobalClassifier(DocAnalyzer analyzer,boolean TestClassifier,boolean SaveClassifier){
+
+
+		// Build global classifier
+		// Build Training and Testing Sets
+		System.out.println(Config.dateFormat.format(new Date())+" Building Training and testing sets:");
+		int TrainingSize=  (int) (Config.NumberOfReviewsInTraining*Config.PercentageOfTraining) ;
+		ArrayList<double[]> TrainingSet=new ArrayList<double[]>();
+		ArrayList<double[]> TestingSet=new ArrayList<double[]>();
+
+		double[]TrainingTrueLabels=new double[TrainingSize];
+		double[]TestingTrueLabels=new double[Config.NumberOfReviewsInTraining-TrainingSize];
+
+		int index=0;
+		for(User user:analyzer.Users)
+			for(Review review:user.Reviews)
+			{
+				double[] point=new double[analyzer.m_Vocabs.size()+1]; // size of vector space model + 1 for beta_0
+				point[0]=1;
+				Set<String> set = analyzer.m_Vocabs.keySet();
+				Iterator<String> itr = set.iterator();
+				int vocabIndex=1;
+				while (itr.hasNext())
+					point[vocabIndex++]=review.getValueFromVSM(itr.next());
+				if(index<TrainingSize){
+					TrainingSet.add(point);
+					TrainingTrueLabels[index++]=review.getLabel();
+				}
+				else
+				{ 
+					TestingSet.add(point);
+					TestingTrueLabels[index-TrainingSize]=review.getLabel();index++;
+				}
+			}
+		System.out.println(Config.dateFormat.format(new Date())+" Training Classifier:");
+		// Create Classifier
+		LogisticRegressionClassifier Classifier=new LogisticRegressionClassifier(analyzer.m_Vocabs.size()+1, Config.ClassifierThreshold, Config.LearningRate);
+		Classifier.Train(TrainingSet, TrainingTrueLabels);
+		if(TestClassifier){
+			System.out.println(Config.dateFormat.format(new Date())+" Test Classifier:");
+			// Test Classifier
+			int CorrectClassifications=0;
+			if(Config.PercentageOfTraining==1d)// test on training set
+			{
+				TestingSet=TrainingSet;
+				TestingTrueLabels=TrainingTrueLabels;
+			}
+			for(int i=0;i<TestingSet.size();++i){
+				if(Classifier.Classify(TestingSet.get(i),Config.ClassifierThreshold)==TestingTrueLabels[i])
+					CorrectClassifications++;
+			}
+
+			System.out.println(Config.dateFormat.format(new Date())+" Classification rate for global classifier: "+CorrectClassifications/(double)TestingSet.size());
+		}
+
+		// Save Classifier
+		if(SaveClassifier)
+			Classifier.Save("global");
+	}
+
+	public static void main(String[] args) {	
+
+		// Load Config file
+		Config.Load();
+
+
+		DocAnalyzer analyzer = new DocAnalyzer( );
+		// Build controlled vocabulary
+		//	BuildVocab(analyzer);
+
+		analyzer.LoadVocab("./Vocab.csv");
+		// Build Vector Space Model
+		// BuildVectorSpaceModel(analyzer);
+
+		// Build and save global classifier
+	//	 BuildTestAndSaveGlobalClassifier(analyzer,true,true);
+
+		// Load Classifier 
+		 LogisticRegressionClassifier Classifier=new LogisticRegressionClassifier(analyzer.m_Vocabs.size()+1, Config.ClassifierThreshold, Config.LearningRate);
+		 Classifier.Load("global");
+		
+		// Test the global classifier on a new user
+		//Load User
+		  User user=analyzer.LoadUser("./A1VYFBHW6OHA59.txt");
+		// Classify User Reviews
+		  user.ClassifyReviews(Classifier, analyzer);
 	}
 
 

@@ -1,2 +1,15 @@
+data directory:
 C:\Users\Mohammad\UserSent\data\sample
+Number of processors:
 8
+Number of reviews in the training:
+16521
+Maximum number of iterations for the gradient descent:
+15
+learning rate, alpha, for the gradient descent:
+1.0
+Classifier Threshold (if P(Y=1)>threshold, then Y=1)
+0.5
+Percentage of data for training
+1
+
