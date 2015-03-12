@@ -12,13 +12,15 @@ import java.util.ArrayList;
 public abstract class Classifier {
 
 	public double[] Parameters;
-	public Classifier(int NumberOfParameters)
+	public DocAnalyzer analyzer;
+	public Classifier(int NumberOfParameters,DocAnalyzer analyzer)
 	{
+		this.analyzer=analyzer;
 		Parameters=new double[NumberOfParameters];
 	}
-	public abstract double Classify(double[] NewInstance);
-	public abstract double Classify(double[] NewInstance,double Threshold);
-	public abstract void Train(ArrayList<double[]> TrainingSet,double[] TrueLabels);
+	public abstract double Classify(int NewInstance);
+	public abstract double Classify(int NewInstance,double Threshold);
+	public abstract void Train(ArrayList<Integer> TrainingSet,double[] TrueLabels);
 
 	public void Save(String FileName){
 		try {

@@ -2,8 +2,8 @@ package structures;
 
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.Iterator;
-import java.util.Set;
+
+
 
 import analyzer.Classifier;
 import analyzer.Config;
@@ -25,31 +25,61 @@ public class User {
 	public void setName(String name) {
 		Name = name;
 	}
-	public void ClassifyReviews(Classifier classifier,DocAnalyzer  analyzer  ){
+	public double[] ClassifyReviews(Classifier classifier,DocAnalyzer  analyzer,int NumberOfReviewsToClassify,Boolean PrintOutput  ){
 		// Build testing set
-		ArrayList<double[]> TestingSet=new ArrayList<double[]>();
+		ArrayList<Integer> TestingSet=new ArrayList<Integer>();
 		double[]TestingTrueLabels=new double[Reviews.size()];
-		int index=0;
-		for(Review review: Reviews)
+		for(int i=0;i<NumberOfReviewsToClassify;++i)
 		{
-			double[] point=new double[analyzer.m_Vocabs.size()+1]; // size of vector space model + 1 for beta_0
-			point[0]=1;
-			Set<String> set = analyzer.m_Vocabs.keySet();
-			Iterator<String> itr = set.iterator();
-			int vocabIndex=1;
-			while (itr.hasNext())
-				point[vocabIndex++]=review.getValueFromVSM(itr.next());
-
-			TestingSet.add(point);
-			TestingTrueLabels[index++]=review.getLabel();
+			TestingSet.add(i);
+			TestingTrueLabels[i]=Reviews.get(i).getLabel();
 		}
 		// Run Classifier
-		int CorrectClassifications=0;
-		for(int i=0;i<TestingSet.size();++i){
-			if(classifier.Classify(TestingSet.get(i),Config.ClassifierThreshold)==TestingTrueLabels[i])
-				CorrectClassifications++;
+		double maxF=-1,maxThreshold=0;
+		double[] Mesures=new double[8];
+		for(double threshold=Config.ClassifierThreshold==-1?0.5:Config.ClassifierThreshold;threshold<(Config.ClassifierThreshold==-1?1d:(Config.ClassifierThreshold+0.001));threshold+=0.005){
+			int CorrectClassifications=0;
+			int PosClassified=0,PosCorrectClassified=0;
+			int NegClassified=0,NegCorrectClassified=0;
+			if(PrintOutput)
+				System.out.println(Config.dateFormat.format(new Date())+" Threshold: "+threshold);
+			for(int i=0;i<TestingSet.size();++i){
+				double label=classifier.Classify(TestingSet.get(i),threshold);
+				if(label==TestingTrueLabels[i])
+					CorrectClassifications++;
+				if(label==1.0d)PosClassified++;else NegClassified++;
+				if(label==1.0d&label==TestingTrueLabels[i])PosCorrectClassified++; 
+				if(label==0d&label==TestingTrueLabels[i])NegCorrectClassified++; 
+			}
+			double posPre=PosCorrectClassified/(double)PosClassified;
+			double posRec=PosCorrectClassified/(double) analyzer.TotalPos ;
+			double posF=2*posPre*posRec/(posPre+posRec);
+			double negPre=NegCorrectClassified/(double)NegClassified;
+			double negRec=NegCorrectClassified/(double) analyzer.TotalNeg ;
+			double negF=2*negPre*negRec/(negPre+negRec);
+			if((negF*posF)>maxF){
+				maxF=negF*posF;maxThreshold=threshold;
+				Mesures[0]=posPre;
+				Mesures[1]=posRec;
+				Mesures[2]=posF;
+				Mesures[3]=negPre;
+				Mesures[4]=negRec;
+				Mesures[5]=negF;
+				Mesures[6]=CorrectClassifications/(double)TestingSet.size();
+				Mesures[7]=threshold;
+				if(PrintOutput){
+					System.out.println(Config.dateFormat.format(new Date())+" Classification rate for global classifier: "+Mesures[6]);
+					System.out.println(Config.dateFormat.format(new Date())+" Positive precision: "+posPre);
+					System.out.println(Config.dateFormat.format(new Date())+" Positive recall: "+posRec);
+					System.out.println(Config.dateFormat.format(new Date())+" Positive FMeasure: "+posF);
+					System.out.println(Config.dateFormat.format(new Date())+" Negative precision: "+negPre);
+					System.out.println(Config.dateFormat.format(new Date())+" Negative recall: "+negRec);
+					System.out.println(Config.dateFormat.format(new Date())+" Negative FMeasure: "+negF);
+				}
+			}
 		}
-
-		System.out.println(Config.dateFormat.format(new Date())+" Classification rate for global classifier: "+CorrectClassifications/(double)Reviews.size());
+		if(PrintOutput) 
+			System.out.println(Config.dateFormat.format(new Date())+" Max FMeasure: "+maxF+" for threshold: "+maxThreshold);
+		return Mesures;
 	}
 }

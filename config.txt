@@ -1,15 +1,71 @@
 data directory:
 C:\Users\Mohammad\UserSent\data\sample
+VSM directory:
+C:\Users\Mohammad\UserSent\data\VSM
 Number of processors:
 8
 Number of reviews in the training:
-16521
+25337
+Number of Positive reviews in the training:
+22827
 Maximum number of iterations for the gradient descent:
-15
+10
 learning rate, alpha, for the gradient descent:
-1.0
-Classifier Threshold (if P(Y=1)>threshold, then Y=1)
 0.5
+Classifier Threshold (if P(Y=1)>threshold, then Y=1) (choose -1 for automatic selection)
+-1
 Percentage of data for training
 1
+Adaptation parameter (lambda)
+0.5
+Adaptation parameter (sigma)
+0.5
 
+C:\Users\Mohammad\UserSent\data\sample
+Vocab size:4751
+# docs:25337
+# pos:22827
+# neg:2510
+
+2015/03/11 21:03:57 Threshold: 0.96 (10 iterations)
+2015/03/11 21:03:58 Classification rate for global classifier: 0.6795496750232126
+2015/03/11 21:03:58 Positive precision: 0.9081116370164845
+2015/03/11 21:03:58 Positive recall: 0.7169012959369581
+2015/03/11 21:03:58 Positive FMeasure: 0.8012568961519797
+2015/03/11 21:03:58 Negative precision: 0.11691442346323824
+2015/03/11 21:03:58 Negative recall: 0.3409889852355285
+2015/03/11 21:03:58 Negative FMeasure: 0.1741263762565821
+
+2015/03/11 15:18:23 Threshold: 0.995  (15 iterations)
+2015/03/11 15:18:24 Classification rate for global classifier: 0.6837279480037141
+2015/03/11 15:18:24 Positive precision: 0.9082509320797536
+2015/03/11 15:18:24 Positive recall: 0.7219263050206284
+2015/03/11 15:18:24 Positive FMeasure: 0.8044404307769174
+2015/03/11 15:18:24 Negative precision: 0.11769513690232938
+2015/03/11 15:18:24 Negative recall: 0.3374736348722756
+2015/03/11 15:18:24 Negative FMeasure: 0.17452430008483819
+
+C:\Users\Mohammad\Desktop\WindowsFormsApplication1\WindowsFormsApplication1\bin\Debug\users\small
+Vocab size:14434
+# docs:234567
+# pos:207177
+# neg:27390
+
+2015/03/11 19:24:43 Threshold: 0.705  (15 iterations)
+2015/03/11 19:25:20 Classification rate for global classifier: 0.645964991473568
+2015/03/11 19:25:20 Positive precision: 0.8947102614941453
+2015/03/11 19:25:20 Positive recall: 0.6790715687741504
+2015/03/11 19:25:20 Positive FMeasure: 0.7721175695205246
+2015/03/11 19:25:20 Negative precision: 0.1401293267402054
+2015/03/11 19:25:20 Negative recall: 0.39560751095867175
+2015/03/11 19:25:20 Negative FMeasure: 0.20695315409752077
+
+new users(A1VYFBHW6OHA59)
+2015/03/12 01:04:11 Threshold: 0.525
+2015/03/12 01:04:11 Classification rate for global classifier: 0.4146341463414634
+2015/03/12 01:04:11 Positive precision: 0.9495798319327731
+2015/03/12 01:04:11 Positive recall: 0.4109090909090909
+2015/03/12 01:04:11 Positive FMeasure: 0.5736040609137056
+2015/03/12 01:04:11 Negative precision: 0.03571428571428571
+2015/03/12 01:04:11 Negative recall: 0.5
+2015/03/12 01:04:11 Negative FMeasure: 0.06666666666666667

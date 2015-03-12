@@ -17,7 +17,11 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Random;
 import java.util.Set;
+
+
+
 
 
 import opennlp.tools.tokenize.Tokenizer;
@@ -26,6 +30,9 @@ import opennlp.tools.tokenize.TokenizerModel;
 
 import org.tartarus.snowball.SnowballStemmer;
 import org.tartarus.snowball.ext.englishStemmer;
+
+
+
 
 
 
@@ -42,25 +49,30 @@ import structures.User;
  * please revise it accordingly to maximize your implementation's efficiency!
  */
 public class DocAnalyzer   {
-	ArrayList<User> Users;
+	//ArrayList<User> Users;
+	ArrayList<Review> Reviews;
 	ArrayList<Tokenizer> tokenizer; // need many because of the threading
 	//a list of stopwords
 	HashSet<String> m_stopwords;
-
+	Random RandomGen;
 	//you can store the loaded reviews in this arraylist for further processing
 	//ArrayList<Post> m_reviews;
 	int reviewsCount ;
 	//you might need something like this to store the counting statistics for validating Zipf's and computing IDF
 	public HashMap<String, Token> m_Vocabs;	
-
+	public int TotalPos;
+	public int TotalNeg;
 	private Object lock1 = new Object();
 	private Object lock2 = new Object();
 	private int MaxTokenID;
 	//we have also provided sample implementation of language model in src.structures.LanguageModel
 
 	public DocAnalyzer( ) {
-
-		Users=new ArrayList<User>();
+		RandomGen=new Random();
+		TotalPos=0;
+		TotalNeg=0;
+		//	Users=new ArrayList<User>();
+		Reviews=new ArrayList<Review>();
 		m_stopwords= new HashSet<String>();
 		m_Vocabs=new HashMap<String, Token>();
 		MaxTokenID=0;
@@ -97,6 +109,13 @@ public class DocAnalyzer   {
 		}
 	}
 
+
+
+
+
+
+
+
 	//sample code for demonstrating how to use Snowball stemmer
 	public String SnowballStemmingDemo(String token) {
 		SnowballStemmer stemmer = new englishStemmer();
@@ -126,6 +145,7 @@ public class DocAnalyzer   {
 			System.err.format("[Error]Failed to open file %s!!", filename);
 		}
 	}
+
 	public void analyzeDocumentDemo(String filename,int core) {		
 		try {
 
@@ -143,7 +163,7 @@ public class DocAnalyzer   {
 
 				// process Content
 				ArrayList<String> AddedTokens=new ArrayList<String>();
-				String previousToken="";
+				//String previousToken="";
 				for(String token:tokenizer.get(core).tokenize(content)){
 					String finalToken=SnowballStemmingDemo(NormalizationDemo(token));
 					if(!finalToken.isEmpty()) // if the token is empty, then try next token
@@ -155,23 +175,27 @@ public class DocAnalyzer   {
 							if(!m_Vocabs.containsKey(finalToken)&&!m_stopwords.contains(finalToken))
 								m_Vocabs.put(finalToken, new Token(MaxTokenID++,finalToken));
 							// bigram
-							if(!previousToken.isEmpty()&&!m_Vocabs.containsKey(previousToken+"-"+finalToken)&&!(m_stopwords.contains(previousToken)&&m_stopwords.contains(finalToken)))
-								m_Vocabs.put(previousToken+"-"+finalToken, new Token(MaxTokenID++,previousToken+"-"+finalToken));
+							//	if(!previousToken.isEmpty()&&!m_Vocabs.containsKey(previousToken+"-"+finalToken)&&!(m_stopwords.contains(previousToken)&&m_stopwords.contains(finalToken)))
+							//	m_Vocabs.put(previousToken+"-"+finalToken, new Token(MaxTokenID++,previousToken+"-"+finalToken));
 
 							if(m_Vocabs.containsKey(finalToken)	&&!AddedTokens.contains(finalToken) ){
 								m_Vocabs.get(finalToken).setValue( m_Vocabs.get(finalToken).getValue()+1);// increase count
 								AddedTokens.add(finalToken);}
 							// bigram
-							if(m_Vocabs.containsKey(previousToken+"-"+finalToken)&&!AddedTokens.contains(finalToken+"-"+finalToken)){
-								m_Vocabs.get(previousToken+"-"+finalToken).setValue( m_Vocabs.get(previousToken+"-"+finalToken).getValue()+1);// increase count
-								AddedTokens.add(previousToken+"-"+finalToken);
-							}
+							//	if(m_Vocabs.containsKey(previousToken+"-"+finalToken)&&!AddedTokens.contains(finalToken+"-"+finalToken)){
+							//		m_Vocabs.get(previousToken+"-"+finalToken).setValue( m_Vocabs.get(previousToken+"-"+finalToken).getValue()+1);// increase count
+							//		AddedTokens.add(previousToken+"-"+finalToken);
+							//	}
 						}
 					}
-					previousToken=finalToken;
+					//	previousToken=finalToken;
 				}
 				synchronized(lock2) {
 					reviewsCount++;
+					if(score>3)
+						TotalPos++;
+					else
+						TotalNeg++;
 				}
 			}
 			reader.close();
@@ -199,7 +223,7 @@ public class DocAnalyzer   {
 					continue;
 				// process Content
 
-				String previousToken="";
+				//String previousToken="";
 				for(String token:tokenizer.get(0).tokenize(r.getContent())){
 					String finalToken=SnowballStemmingDemo(NormalizationDemo(token));
 					if(!finalToken.isEmpty()) // if the token is empty, then try next token
@@ -214,29 +238,33 @@ public class DocAnalyzer   {
 							r.m_VSM.put(vocabID,r.m_VSM.get(vocabID)+1);// increase count
 						}
 						// bigram
-						if(m_Vocabs.containsKey(previousToken+"-"+finalToken)){
+						/*if(m_Vocabs.containsKey(previousToken+"-"+finalToken)){
 							String vocabID=previousToken+"-"+finalToken;
 							if(!r.m_VSM.containsKey(vocabID))
 								r.m_VSM.put(vocabID, 0.0);
 							r.m_VSM.put(vocabID,r.m_VSM.get(vocabID)+1);// increase count
-						}
+						}*/
 
 					}
-					previousToken=finalToken;
+					//previousToken=finalToken;
 				}
 				if(r.m_VSM.size()==0)// empty vector .. do not add
 					continue;
-				// normalize TF (Sub-linear TF scaling) and them multiply by IDF to obtain TF-IDF
+				reviewsCount++;
+
+				//r.CalculateNorm();
+				user.Reviews.add(r);
+
+			}
+			// normalize TF (Sub-linear TF scaling) and them multiply by IDF to obtain TF-IDF
+			for(Review r:user.Reviews){
 				Set<String> set = r.m_VSM.keySet();
 				Iterator<String> itr = set.iterator();
 				while (itr.hasNext())
 				{
 					String key = itr.next();
-					r.m_VSM.put(key,(1+Math.log10(r.m_VSM.get(key)))*(1+Math.log10(Config.NumberOfReviewsInTraining/m_Vocabs.get(key).getValue())));
+					r.m_VSM.put(key,(1+Math.log10(r.m_VSM.get(key)))*(1+Math.log10(reviewsCount/m_Vocabs.get(key).getValue())));
 				}
-				//r.CalculateNorm();
-				user.Reviews.add(r);
-
 			}
 			reader.close();
 			return user;
@@ -246,13 +274,14 @@ public class DocAnalyzer   {
 		}
 
 	}
-	public void analyzeVSM(String filename,int core) {		
+	public void analyzeVSM(String filename,int core,Boolean save) {		
 		try {
-			User user=new User();
+			//User user=new User();
 			BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(filename), "UTF-8"));
 			String line;
-			user.setID(filename.substring(filename.lastIndexOf("\\")+1, filename.length()-4));
-			user.setName(reader.readLine());
+			//user.setID(filename.substring(filename.lastIndexOf("\\")+1, filename.length()-4));
+			//user.setName(reader.readLine());
+			reader.readLine();
 			while ((line = reader.readLine()) != null&&!line.isEmpty()) {
 				Review r=new Review();
 				r.setProduct_ID(line);
@@ -264,7 +293,7 @@ public class DocAnalyzer   {
 					continue;
 				// process Content
 
-				String previousToken="";
+				//String previousToken="";
 				for(String token:tokenizer.get(core).tokenize(r.getContent())){
 					String finalToken=SnowballStemmingDemo(NormalizationDemo(token));
 					if(!finalToken.isEmpty()) // if the token is empty, then try next token
@@ -279,15 +308,15 @@ public class DocAnalyzer   {
 								r.m_VSM.put(vocabID,r.m_VSM.get(vocabID)+1);// increase count
 							}
 							// bigram
-							if(m_Vocabs.containsKey(previousToken+"-"+finalToken)){
+							/*if(m_Vocabs.containsKey(previousToken+"-"+finalToken)){
 								String vocabID=previousToken+"-"+finalToken;
 								if(!r.m_VSM.containsKey(vocabID))
 									r.m_VSM.put(vocabID, 0.0);
 								r.m_VSM.put(vocabID,r.m_VSM.get(vocabID)+1);// increase count
-							}
+							}*/
 						}
 					}
-					previousToken=finalToken;
+					//	previousToken=finalToken;
 				}
 				if(r.m_VSM.size()==0)// empty vector .. do not add
 					continue;
@@ -300,15 +329,24 @@ public class DocAnalyzer   {
 					r.m_VSM.put(key,(1+Math.log10(r.m_VSM.get(key)))*(1+Math.log10(Config.NumberOfReviewsInTraining/m_Vocabs.get(key).getValue())));
 				}
 				//r.CalculateNorm();
-				user.Reviews.add(r);
+				//user.Reviews.add(r);
 				synchronized(lock2) {
 					reviewsCount++;
+					Reviews.add(r);
+					if(r.getScore()>3)
+						TotalPos++;
+					else
+						TotalNeg++;
+					// Save review
+					if(save)
+						r.Save(filename.substring(filename.lastIndexOf("\\")+1, filename.length()-4));
 				}
 			}
 			reader.close();
-			synchronized(lock1) {
-				Users.add(user);
-			}
+			//	synchronized(lock1) {
+			//Users.add(user);
+
+			//}
 		} catch(IOException e){
 			System.err.format("[Error]Failed to open file %s!!", filename);
 		}
@@ -387,7 +425,63 @@ public class DocAnalyzer   {
 	}
 
 
+	public static void LoadVSM(DocAnalyzer analyzer)
+	{
 
+		ArrayList<String>Files=analyzer.GetFiles(Config.VSMDirPath, ".vsm");
+		int FilesSize=Files.size();
+		HashMap<Integer,String> ProcessingStatus = new HashMap<Integer, String>(); // used for output purposes
+		for (int i = 1; i <= 10; i++)
+			ProcessingStatus.put((int)(FilesSize * (i / 10d)), i+"0% ("+(int)(FilesSize * (i / 10d))+" out of "+FilesSize+")." );
+
+
+		ArrayList<Thread> threads = new ArrayList<Thread>();
+		for(int i=0;i<Config.NumberOfProcessors;++i){
+			threads.add(  (new Thread() {
+				int core;
+				public void run() {
+					try {
+						for (int j = 0; j + core <FilesSize; j +=Config.NumberOfProcessors)
+						{
+							if (ProcessingStatus.containsKey(j + core))
+								System.out.println(Config.dateFormat.format(new Date())+" - Loaded " +ProcessingStatus.get(j + core));
+							analyzer.LoadReview(Files.get(j+core));
+						}
+					} catch (Exception e) {
+						e.printStackTrace();
+					} 
+
+				}
+				private Thread initialize(int core) {
+					this.core = core;
+					return this;
+				}
+			}).initialize(i));
+			threads.get(i).start();
+		}
+		for(int i=0;i<Config.NumberOfProcessors;++i){
+			try {
+				threads.get(i).join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			} 
+		} 
+		System.out.println("Loaded all documents!");
+
+		analyzer.RemoveVocabTail(); 
+		System.out.println("Vocab size:"+analyzer.m_Vocabs.size());
+		System.out.println("# docs:"+analyzer.reviewsCount);
+
+
+	}
+	protected void LoadReview(String Filename) {
+		Review r=new Review();
+		r.Load(Filename); 
+		synchronized(lock2) {
+			Reviews.add(r);
+			reviewsCount++;
+		}
+	}
 	public static void BuildVocab(DocAnalyzer analyzer)
 	{
 
@@ -434,10 +528,12 @@ public class DocAnalyzer   {
 		analyzer.RemoveVocabTail(); 
 		System.out.println("Vocab size:"+analyzer.m_Vocabs.size());
 		System.out.println("# docs:"+analyzer.reviewsCount);
+		System.out.println("# pos:"+analyzer.TotalPos);
+		System.out.println("# neg:"+analyzer.TotalNeg);
 		analyzer.Save(analyzer.m_Vocabs,"Vocab");
 
 	}
-	public static void BuildVectorSpaceModel(DocAnalyzer analyzer){
+	public static void BuildAndSaveVectorSpaceModel(DocAnalyzer analyzer,Boolean save){
 
 
 
@@ -458,7 +554,7 @@ public class DocAnalyzer   {
 						{
 							if (ProcessingStatus.containsKey(j + core))
 								System.out.println(Config.dateFormat.format(new Date())+" - Loaded " +ProcessingStatus.get(j + core));
-							analyzer.analyzeVSM(  Files.get(j+core) ,core);
+							analyzer.analyzeVSM(  Files.get(j+core) ,core,save);
 						}
 					} catch (Exception e) {
 						e.printStackTrace();
@@ -480,6 +576,22 @@ public class DocAnalyzer   {
 			} 
 		} 
 		System.out.println("Loaded all documents!");
+
+
+	}
+	public static void VerifySampleDist(double[]Sample)
+	{
+		// calculate percentage
+		int Label1Count=0;
+		for(int i=0;i<Sample.length;++i)
+			if(Sample[i]==1.0d)
+				Label1Count++;
+		// Check with expected Sample and report
+		double expectedPosPer=Config.NumberOfPostiveReviewsInTraining/(double)Config.NumberOfReviewsInTraining;
+		int expectedPosNum=(int)(expectedPosPer*Sample.length);
+		System.out.println("Expected: "+expectedPosPer+" positive ("+expectedPosNum+") and "+(1-expectedPosPer)+" negative ("+(Sample.length-expectedPosNum)+").");
+		double actualPosPer=Label1Count/(double)Sample.length;
+		System.out.println("Actual: "+actualPosPer+" positive ("+Label1Count+") and "+(1-actualPosPer)+" negative ("+(Sample.length-Label1Count)+").");
 	}
 	public static void BuildTestAndSaveGlobalClassifier(DocAnalyzer analyzer,boolean TestClassifier,boolean SaveClassifier){
 
@@ -487,61 +599,104 @@ public class DocAnalyzer   {
 		// Build global classifier
 		// Build Training and Testing Sets
 		System.out.println(Config.dateFormat.format(new Date())+" Building Training and testing sets:");
-		int TrainingSize=  (int) (Config.NumberOfReviewsInTraining*Config.PercentageOfTraining) ;
-		ArrayList<double[]> TrainingSet=new ArrayList<double[]>();
-		ArrayList<double[]> TestingSet=new ArrayList<double[]>();
+
+		int TrainingPostiveSize=  (int) (analyzer.TotalPos*Config.PercentageOfTraining);
+		int TrainingNegativeSize=  (int) (analyzer.TotalNeg*Config.PercentageOfTraining);
+		int TrainingSize=TrainingPostiveSize+TrainingNegativeSize;
+		ArrayList<Integer> TrainingSet=new ArrayList<Integer>();
+		ArrayList<Integer> TestingSet=new ArrayList<Integer>();
 
 		double[]TrainingTrueLabels=new double[TrainingSize];
-		double[]TestingTrueLabels=new double[Config.NumberOfReviewsInTraining-TrainingSize];
+		double[]TestingTrueLabels=new double[analyzer.reviewsCount-TrainingSize];
+		// Generate Random training and testing samples that has the same pos/neg percentage as the overall set
+		for(int i=0;i<TrainingSize;++i){
+			int NextItem=(int)(analyzer.RandomGen.nextDouble()*analyzer.reviewsCount);
+			while(TrainingSet.contains(NextItem)||(i<TrainingPostiveSize&&analyzer.Reviews.get(NextItem).getScore()<3)||(i>=TrainingPostiveSize&&analyzer.Reviews.get(NextItem).getScore()>3)) // if already added or not positive (when adding positive) or not negative (when adding negative), then choose another review
+				NextItem=(int)(analyzer.RandomGen.nextDouble()*analyzer.reviewsCount);
+			TrainingSet.add(NextItem);
+			TrainingTrueLabels[i]=analyzer.Reviews.get(i).getLabel();
+		}
+		// Add the remaining to test
+		if(Config.PercentageOfTraining==1.0d)//Use all for testing, copy training to testing
+		{
+			TestingTrueLabels=new double[analyzer.reviewsCount];
+			for(int i=0;i<analyzer.reviewsCount;++i)
+			{TestingSet.add(TrainingSet.get(i));TestingTrueLabels[i]=TrainingTrueLabels[i];}
+		}
+		else{
+			int index=0;
+			for(int i=0;i<analyzer.reviewsCount;++i)
+				if(!TrainingSet.contains(i))
+				{TestingSet.add(i);TestingTrueLabels[index++]=analyzer.Reviews.get(i).getLabel();}
+		}
+		// Verify distribution of both training and testing sample
+		VerifySampleDist(TrainingTrueLabels);
+		VerifySampleDist(TestingTrueLabels);
 
-		int index=0;
-		for(User user:analyzer.Users)
-			for(Review review:user.Reviews)
-			{
-				double[] point=new double[analyzer.m_Vocabs.size()+1]; // size of vector space model + 1 for beta_0
-				point[0]=1;
-				Set<String> set = analyzer.m_Vocabs.keySet();
-				Iterator<String> itr = set.iterator();
-				int vocabIndex=1;
-				while (itr.hasNext())
-					point[vocabIndex++]=review.getValueFromVSM(itr.next());
-				if(index<TrainingSize){
-					TrainingSet.add(point);
-					TrainingTrueLabels[index++]=review.getLabel();
-				}
-				else
-				{ 
-					TestingSet.add(point);
-					TestingTrueLabels[index-TrainingSize]=review.getLabel();index++;
-				}
-			}
 		System.out.println(Config.dateFormat.format(new Date())+" Training Classifier:");
 		// Create Classifier
-		LogisticRegressionClassifier Classifier=new LogisticRegressionClassifier(analyzer.m_Vocabs.size()+1, Config.ClassifierThreshold, Config.LearningRate);
+		LogisticRegressionClassifier Classifier=new LogisticRegressionClassifier(analyzer.m_Vocabs.size()+1,   Config.LearningRate,analyzer);
 		Classifier.Train(TrainingSet, TrainingTrueLabels);
 		if(TestClassifier){
 			System.out.println(Config.dateFormat.format(new Date())+" Test Classifier:");
 			// Test Classifier
-			int CorrectClassifications=0;
-			if(Config.PercentageOfTraining==1d)// test on training set
-			{
-				TestingSet=TrainingSet;
-				TestingTrueLabels=TrainingTrueLabels;
+			double maxF=-1,maxThreshold=0;
+			for(double threshold=Config.ClassifierThreshold==-1?0.5:Config.ClassifierThreshold;threshold<(Config.ClassifierThreshold==-1?1d:(Config.ClassifierThreshold+0.001));threshold+=0.005){
+				int CorrectClassifications=0;
+				int PosClassified=0,PosCorrectClassified=0;
+				int NegClassified=0,NegCorrectClassified=0;
+				System.out.println(Config.dateFormat.format(new Date())+" Threshold: "+threshold);
+				for(int i=0;i<TestingSet.size();++i){
+					double label=Classifier.Classify(TestingSet.get(i),threshold);
+					if(label==TestingTrueLabels[i])
+						CorrectClassifications++;
+					if(label==1.0d)PosClassified++;else NegClassified++;
+					if(label==1.0d&label==TestingTrueLabels[i])PosCorrectClassified++; 
+					if(label==0d&label==TestingTrueLabels[i])NegCorrectClassified++; 
+				}
+				double posPre=PosCorrectClassified/(double)PosClassified;
+				double posRec=PosCorrectClassified/(double)(Config.PercentageOfTraining==1d?analyzer.TotalPos:analyzer.TotalPos*(1d-Config.PercentageOfTraining));
+				double posF=2*posPre*posRec/(posPre+posRec);
+				double negPre=NegCorrectClassified/(double)NegClassified;
+				double negRec=NegCorrectClassified/(double)(Config.PercentageOfTraining==1d?analyzer.TotalNeg:analyzer.TotalNeg*(1d-Config.PercentageOfTraining));
+				double negF=2*negPre*negRec/(negPre+negRec);
+				if((negF*posF)>maxF){
+					maxF=negF*posF;maxThreshold=threshold;
+					System.out.println(Config.dateFormat.format(new Date())+" Classification rate for global classifier: "+CorrectClassifications/(double)TestingSet.size());
+					System.out.println(Config.dateFormat.format(new Date())+" Positive precision: "+posPre);
+					System.out.println(Config.dateFormat.format(new Date())+" Positive recall: "+posRec);
+					System.out.println(Config.dateFormat.format(new Date())+" Positive FMeasure: "+posF);
+					System.out.println(Config.dateFormat.format(new Date())+" Negative precision: "+negPre);
+					System.out.println(Config.dateFormat.format(new Date())+" Negative recall: "+negRec);
+					System.out.println(Config.dateFormat.format(new Date())+" Negative FMeasure: "+negF);
+				}
 			}
-			for(int i=0;i<TestingSet.size();++i){
-				if(Classifier.Classify(TestingSet.get(i),Config.ClassifierThreshold)==TestingTrueLabels[i])
-					CorrectClassifications++;
-			}
-
-			System.out.println(Config.dateFormat.format(new Date())+" Classification rate for global classifier: "+CorrectClassifications/(double)TestingSet.size());
+			System.out.println(Config.dateFormat.format(new Date())+" Max FMeasure: "+maxF+" for threshold: "+maxThreshold);
 		}
 
 		// Save Classifier
 		if(SaveClassifier)
 			Classifier.Save("global");
 	}
-
+	public static void SaveClassifierPerformance(ArrayList<double[]> PerformanceArray,String FileName)
+	{
+		try {
+			FileWriter fstream = new FileWriter("./"+FileName+".performance", false);
+			BufferedWriter out = new BufferedWriter(fstream);
+			for(int i=0;i<PerformanceArray.size();++i){
+				String outstr="";
+				for(double param:PerformanceArray.get(i))  
+					outstr+=param+",";
+				out.write(outstr.substring(0, outstr.length()-1)+"\n");
+			}
+			out.close();
+			System.out.println(FileName+" Classifier Performance Saved!");
+		} catch (Exception e) {
+			e.printStackTrace(); 
+		}
+	}
 	public static void main(String[] args) {	
+
 
 		// Load Config file
 		Config.Load();
@@ -549,24 +704,56 @@ public class DocAnalyzer   {
 
 		DocAnalyzer analyzer = new DocAnalyzer( );
 		// Build controlled vocabulary
-		//	BuildVocab(analyzer);
+		// BuildVocab(analyzer);
 
 		analyzer.LoadVocab("./Vocab.csv");
 		// Build Vector Space Model
-		// BuildVectorSpaceModel(analyzer);
-
+		// BuildAndSaveVectorSpaceModel(analyzer,false);
+		//	LoadVSM(analyzer);
 		// Build and save global classifier
-	//	 BuildTestAndSaveGlobalClassifier(analyzer,true,true);
+		//  BuildTestAndSaveGlobalClassifier(analyzer,true,true);
 
 		// Load Classifier 
-		 LogisticRegressionClassifier Classifier=new LogisticRegressionClassifier(analyzer.m_Vocabs.size()+1, Config.ClassifierThreshold, Config.LearningRate);
+		 LogisticRegressionClassifier Classifier=new LogisticRegressionClassifier(analyzer.m_Vocabs.size()+1,  Config.LearningRate,analyzer);
 		 Classifier.Load("global");
-		
+
 		// Test the global classifier on a new user
 		//Load User
-		  User user=analyzer.LoadUser("./A1VYFBHW6OHA59.txt");
-		// Classify User Reviews
-		  user.ClassifyReviews(Classifier, analyzer);
+		User user=analyzer.LoadUser("./A1VYFBHW6OHA59.txt");
+		for(Review r:user.Reviews)
+		{ 
+			analyzer.Reviews.add(r);
+			if(r.getScore()>3)analyzer.TotalPos++;
+			else if(r.getScore()<3)analyzer.TotalNeg++;
+			analyzer.reviewsCount++;
+		}
+		// Classify all User Reviews using global
+		//user.ClassifyReviews(Classifier, analyzer,user.Reviews.size(),true);
+
+		// Build User-personalized classifier
+		TransformedLogisticRegressionClassifier PersonalizedClassifier=new TransformedLogisticRegressionClassifier(analyzer.m_Vocabs.size()+1 ,Config.LearningRate,analyzer, user, Config.AdaptationLambda , Config.AdaptationSigma) ;
+		PersonalizedClassifier.Load("global");
+		ArrayList<Integer>TrainingSet=new ArrayList<Integer>();
+		double[] TrueLabels=new double[user.Reviews.size()];
+		ArrayList<double[]>GlobalClassifierPerformance=new ArrayList<double[]>();
+		ArrayList<double[]>PersonalizedClassifierPerformance=new ArrayList<double[]>();
+		// online training
+		for(int i=0;i<user.Reviews.size();++i){
+			TrainingSet.add(i);
+			// Get labels
+			TrueLabels[i]=user.Reviews.get(i).getLabel();
+			PersonalizedClassifier.InitParameters();
+			PersonalizedClassifier.Train(TrainingSet, TrueLabels);
+			// Test global classifier vs personalized
+			GlobalClassifierPerformance.add(user.ClassifyReviews(Classifier, analyzer,i,false));
+			PersonalizedClassifierPerformance.add(user.ClassifyReviews(PersonalizedClassifier, analyzer,i,false));
+		}
+		// Save Performance report
+	 	SaveClassifierPerformance(GlobalClassifierPerformance,"global");
+		SaveClassifierPerformance(PersonalizedClassifierPerformance,"personalized");
+
+
+
 	}
 
 

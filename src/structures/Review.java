@@ -3,9 +3,18 @@
  */
 package structures;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileInputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Set;
+
+import analyzer.Config;
 
 
 public class Review {
@@ -96,5 +105,40 @@ public class Review {
 	private String Usefulness;
 	private long Time;
 	private double Score;
+	public void Save(String userID){
+		try {
+			FileWriter fstream = new FileWriter(Paths.get(Config.VSMDirPath, userID+"_"+Product_ID+"_"+Score+".vsm").toString(), false);
+			BufferedWriter out = new BufferedWriter(fstream);
+			Set<String> set = m_VSM.keySet();
+			Iterator<String> itr = set.iterator();
+			out.write(userID+"\n"+Product_ID+"\n"+Score+"\n");
+			while (itr.hasNext())
+			{
+				String key = itr.next();
+				out.write(key+","+m_VSM.get(key)+"\n" ) ;
+			}
 
+			out.close();
+		} catch (Exception e) {
+			e.printStackTrace(); 
+		}
+	}
+	public void Load(String FileName){
+		try {
+			BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream( FileName ), "UTF-8"));
+			reader.readLine() ; // userID ... might need it later
+			Product_ID=  reader.readLine() ;
+			Score=Double.parseDouble( reader.readLine());
+			String line;
+			while ((line = reader.readLine()) != null) {
+				if(!line.isEmpty()){
+					String[]vals=line.split(",");
+					m_VSM.put(vals[0], Double.parseDouble(vals[1]));
+				}
+			}
+			reader.close();
+		} catch(IOException e){
+			System.err.format("[Error]Failed to open file !!" );
+		}
+	}
 }

@@ -2,28 +2,32 @@ package analyzer;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Iterator;
+import java.util.Set;
 
 public class LogisticRegressionClassifier extends Classifier {
-	private double ClassifingThreshold;
-	private double LearningRate;
-	public LogisticRegressionClassifier(int NumberOfParameters,double ClassifingThreshold,double LearningRate) {
-		super(NumberOfParameters);
-		this.ClassifingThreshold=ClassifingThreshold;
+	 
+	protected double LearningRate;
+	public LogisticRegressionClassifier(int NumberOfParameters, double LearningRate,DocAnalyzer analyzer) {
+		super(NumberOfParameters,analyzer);
+		 
 		this.setLearningRate(LearningRate);
 	}
 	@Override
-	public double Classify(double[] NewInstance) {
+	public double Classify(int NewInstance) {
 		double value=0;
-		for (int i=0;i< Parameters.length;++i)
-			value+=Parameters[i]*NewInstance[i];
+		Set<String> set = analyzer.m_Vocabs.keySet();
+		Iterator<String> itr = set.iterator();
+		for (int i=0;i<=analyzer.m_Vocabs.size();++i)
+			value+=Parameters[i]*(i==0?1:analyzer.Reviews.get(NewInstance).getValueFromVSM(itr.next()));
 		return 1/(double)(1+Math.exp(-1*value)); // sigmod function
 	}
 	@Override
-	public double Classify(double[] NewInstance, double Threshold) {
+	public double Classify(int NewInstance, double Threshold) {
 		return Classify(NewInstance)>Threshold?1:0;
 	}
 	@Override
-	public void Train(ArrayList<double[]> TrainingSet,double[] TrueLabels) {
+	public void Train(ArrayList<Integer> TrainingSet,double[] TrueLabels) {
 		// Minimize the cost function using Gradient Descent
 		for(int i=0;i<Config.MaxIterations;++i){
 			System.out.println(Config.dateFormat.format(new Date())+" Current Iteration:"+i);
@@ -32,22 +36,19 @@ public class LogisticRegressionClassifier extends Classifier {
 			for(int j=0;j<TrainingSet.size();++j)
 				errors[j]=Classify(TrainingSet.get(j))-TrueLabels[j];
 			// Update parameters
-			for(int j=0;j<Parameters.length;++j){
+			Set<String> set = analyzer.m_Vocabs.keySet();
+			Iterator<String> itr = set.iterator();
+			for(int j=0;j<=analyzer.m_Vocabs.size();++j){
 				double update=0;
+				String CurrectTerm=j==0?"":itr.next();
 				for(int k=0;k<TrainingSet.size();++k)
-					update+=errors[k]*TrainingSet.get(k)[j];
-				Parameters[j]-=LearningRate*update;
+					update+=errors[k]*(j==0?1:analyzer.Reviews.get(TrainingSet.get(k)).getValueFromVSM(CurrectTerm));
+				Parameters[j]-=LearningRate*update/(double)TrainingSet.size();
 			}
 		}
 	}
 
-	public double getClassifingThreshold() {
-		return ClassifingThreshold;
-	}
-
-	public void setClassifingThreshold(double classifingThreshold) {
-		ClassifingThreshold = classifingThreshold;
-	}
+ 
 	public double getLearningRate() {
 		return LearningRate;
 	}
